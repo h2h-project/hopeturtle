@@ -1,0 +1,13 @@
+[Unit]
+Description=HopeTurtle GPS one-shot logger
+
+[Service]
+Type=oneshot
+Environment=HT_SERIAL_PORT=/dev/serial0
+Environment=HT_BAUD=9600
+Environment=HT_DATA_DIR=/home/pi/hope-turtle-code/data
+WorkingDirectory=/home/pi/hope-turtle-code
+ExecStart=/usr/bin/python3 /home/pi/hope-turtle-code/src/gps_snapshot.py
+User=pi
+Group=pi
+Nice=10
