@@ -2,6 +2,7 @@
 Description=Run HopeTurtle GPS logger every 5 minutes
 
 [Timer]
+# Wait 30s after boot, then run every 5 minutes
 OnBootSec=30s
 OnUnitActiveSec=5min
 AccuracySec=15s
