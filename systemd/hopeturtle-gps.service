@@ -3,11 +3,20 @@ Description=HopeTurtle GPS one-shot logger
 
 [Service]
 Type=oneshot
+# Environment overrides (optional – script has sane defaults)
 Environment=HT_SERIAL_PORT=/dev/serial0
 Environment=HT_BAUD=9600
-Environment=HT_DATA_DIR=/home/pi/hope-turtle-code/data
-WorkingDirectory=/home/pi/hope-turtle-code
-ExecStart=/usr/bin/python3 /home/pi/hope-turtle-code/src/gps_snapshot.py
-User=pi
-Group=pi
+Environment=HT_DATA_DIR=/home/hopeturtle002/hopeturtle/data
+
+# Where to run from
+WorkingDirectory=/home/hopeturtle002/hopeturtle
+
+# Command to run
+ExecStart=/usr/bin/python3 /home/hopeturtle002/hopeturtle/src/gps_snapshot.py
+
+# Run as your user, not root
+User=hopeturtle002
+Group=hopeturtle002
+
+# Lower priority so it doesn’t compete with other tasks
 Nice=10
