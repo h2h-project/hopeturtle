@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# --- HopeTurtle one-command updater ---
+# --- HopeTurtle one-command UPDATER  ---
 # What it does:
 # - git pull
 # - ensure deps
