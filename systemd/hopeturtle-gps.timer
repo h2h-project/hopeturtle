@@ -1,10 +1,22 @@
+#      ___________    _____
+#  /               \ |  o  | 
+# |                |/   __\| 
+# |  _______________  /     
+#   |_|_|     |_|_|
+#
+# HopeTurtle Timer 🐢
+# This systemd timer triggers the hopeturtle-gps.service.
+# It runs once ~30 seconds after boot, then repeats every 5 minutes
+# (at 00, 05, 10, 15… each hour). This ensures the GPS logger script
+# appends a fresh row to the daily CSV log file at a steady cadence.
+
 [Unit]
 Description=Run HopeTurtle GPS logger every 5 minutes
 
 [Timer]
-# Wait 30s after boot, then run every 5 minutes
+# Start ~30s after boot, then repeat every 5 minutes on the wall clock
 OnBootSec=30s
-OnUnitActiveSec=5min
+OnCalendar=*:0/5
 AccuracySec=15s
 Persistent=true
 
