@@ -1,17 +1,35 @@
+#      ___________    _____
+#  /               \ |  o  | 
+# |                |/   __\| 
+# |  _______________  /     
+#   |_|_|     |_|_|
+#
+# HopeTurtle GPS Service 🐢
+# One-shot unit that runs the GPS snapshot script once (called by the timer).
+# The script reads NMEA from /dev/serial0 and appends one CSV row to the
+# daily log in HT_DATA_DIR. It always exits 0 (so the timer stays green even
+# when there’s no GPS fix yet). Configure paths/baud via env vars below or
+# in an optional /etc/default/hopeturtle-gps file.
+
 [Unit]
 Description=HopeTurtle GPS one-shot logger
+# Serial is a local device; wait for local filesystems just in case.
+After=local-fs.target
 
 [Service]
 Type=oneshot
-# Environment overrides (optional – script has sane defaults)
+
+# Optional central config file (overrides env below if present).
+# Create it as: /etc/default/hopeturtle-gps with lines like HT_DATA_DIR=/path
+EnvironmentFile=-/etc/default/hopeturtle-gps
+
+# Environment overrides (script has sane defaults if these are omitted)
 Environment=HT_SERIAL_PORT=/dev/serial0
 Environment=HT_BAUD=9600
 Environment=HT_DATA_DIR=/home/hopeturtle002/hopeturtle/data
 
-# Where to run from
+# Working directory & command
 WorkingDirectory=/home/hopeturtle002/hopeturtle
-
-# Command to run
 ExecStart=/usr/bin/python3 /home/hopeturtle002/hopeturtle/src/gps_snapshot.py
 
 # Run as your user, not root
@@ -20,3 +38,10 @@ Group=hopeturtle002
 
 # Lower priority so it doesn’t compete with other tasks
 Nice=10
+
+# Journald is default, but we note it explicitly for clarity:
+StandardOutput=journal
+StandardError=journal
+
+# If the script ever were changed to return 1 on no-fix, you could uncomment:
+# SuccessExitStatus=0 1
