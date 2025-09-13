@@ -1,30 +1,47 @@
-#!/usr/bin/env bash
-set -euo pipefail
+#!/bin/bash
+set -e
 
-# --- HopeTurtle first-time installer ---
-# Use this for the very first setup on a Pi.
-# It delegates to update.sh and suggests a reboot
-# so GUI autostart + group membership take effect.
+echo "==> HopeTurtle installer starting..."
 
-REPO_DIR="$(cd "$(dirname "$0")/.." && pwd)"
-cd "$REPO_DIR"
+USER=$(whoami)
+HOME_DIR=$(eval echo ~$USER)
+REPO_DIR="$HOME_DIR/hopeturtle"
+DATA_DIR="$REPO_DIR/data"
 
-# Make sure update.sh is executable
-chmod +x "$REPO_DIR/scripts/update.sh"
+echo "==> Repo: $REPO_DIR"
+echo "==> Using user: $USER (home: $HOME_DIR)"
+echo "==> Data dir: $DATA_DIR"
 
-# Run the updater
-"$REPO_DIR/scripts/update.sh"
+# Ensure Python + serial support
+echo "==> Installing dependencies..."
+sudo apt-get update
+sudo apt-get install -y python3-serial jq
 
-echo
-echo "✅ Install complete."
-echo "If this was your first run on this Pi, consider rebooting now so:"
-echo " - GUI autostart (log terminal) kicks in"
-echo " - New 'dialout' group membership is active for your user"
-echo
-read -r -p "Reboot now? [y/N] " ans || true
-if [[ "${ans:-N}" =~ ^[Yy]$ ]]; then
-  sudo reboot
+# Ensure data dir exists
+mkdir -p "$DATA_DIR"
+
+# Configure mini UART for GPS (pins 11+13 -> /dev/ttyS0)
+if ! grep -q "dtoverlay=uart1,txd1_pin=17,rxd1_pin=27" /boot/config.txt; then
+  echo "dtoverlay=uart1,txd1_pin=17,rxd1_pin=27" | sudo tee -a /boot/config.txt
+  echo "==> Configured mini UART overlay (reboot required for GPS)."
 else
-  echo "You can reboot later with: sudo reboot"
+  echo "==> Mini UART overlay already present."
 fi
 
+# Install systemd units
+echo "==> Installing systemd service + timer..."
+sudo cp systemd/hopeturtle-gps.* /etc/systemd/system/
+sudo systemctl daemon-reload
+sudo systemctl enable --now hopeturtle-gps.timer
+
+# GUI autostart of logs
+AUTOSTART_DIR="$HOME_DIR/.config/autostart"
+mkdir -p "$AUTOSTART_DIR"
+cp scripts/show_logs.desktop "$AUTOSTART_DIR/"
+
+# Trigger manual run
+echo "==> Triggering one manual run..."
+sudo systemctl start hopeturtle-gps.service || true
+
+echo "✅ Install complete."
+echo "⚠️ Please reboot now to activate mini UART for GPS."
