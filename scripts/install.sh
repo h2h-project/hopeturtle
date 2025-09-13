@@ -12,36 +12,42 @@ echo "==> Repo: $REPO_DIR"
 echo "==> Using user: $USER (home: $HOME_DIR)"
 echo "==> Data dir: $DATA_DIR"
 
-# Ensure Python + serial support
+# ---- Ensure dependencies ----
 echo "==> Installing dependencies..."
 sudo apt-get update
-sudo apt-get install -y python3-serial jq
+sudo apt-get install -y python3-serial python3-pigpio pigpio jq
 
-# Ensure data dir exists
+# ---- Ensure pigpio daemon runs at boot (needed for soft-serial GPS) ----
+echo "==> Enabling pigpiod..."
+sudo systemctl enable --now pigpiod
+
+# ---- Ensure data dir exists ----
 mkdir -p "$DATA_DIR"
 
-# Configure mini UART for GPS (pins 11+13 -> /dev/ttyS0)
-if ! grep -q "dtoverlay=uart1,txd1_pin=17,rxd1_pin=27" /boot/config.txt; then
-  echo "dtoverlay=uart1,txd1_pin=17,rxd1_pin=27" | sudo tee -a /boot/config.txt
-  echo "==> Configured mini UART overlay (reboot required for GPS)."
+# ---- Enable full UART for SIM900 on pins 8/10 ----
+if ! grep -q "^enable_uart=1" /boot/firmware/config.txt; then
+  echo "enable_uart=1" | sudo tee -a /boot/firmware/config.txt
+  echo "==> Enabled full UART for SIM900 (pins 8/10). Reboot required."
 else
-  echo "==> Mini UART overlay already present."
+  echo "==> UART already enabled."
 fi
 
-# Install systemd units
+# ---- Install systemd service + timer ----
 echo "==> Installing systemd service + timer..."
 sudo cp systemd/hopeturtle-gps.* /etc/systemd/system/
 sudo systemctl daemon-reload
 sudo systemctl enable --now hopeturtle-gps.timer
 
-# GUI autostart of logs
+# ---- GUI autostart of logs ----
 AUTOSTART_DIR="$HOME_DIR/.config/autostart"
 mkdir -p "$AUTOSTART_DIR"
 cp scripts/show_logs.desktop "$AUTOSTART_DIR/"
 
-# Trigger manual run
+# ---- Trigger one manual run ----
 echo "==> Triggering one manual run..."
 sudo systemctl start hopeturtle-gps.service || true
 
+# ---- Summary ----
 echo "✅ Install complete."
-echo "⚠️ Please reboot now to activate mini UART for GPS."
+echo "⚠️ If 'enable_uart=1' was just added, please reboot for SIM900 to work."
+echo "💡 GPS will read via pigpio soft-serial on GPIO17 (pin 11)."
