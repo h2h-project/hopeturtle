@@ -23,10 +23,12 @@ Type=oneshot
 # Create it as: /etc/default/hopeturtle-gps with lines like HT_DATA_DIR=/path
 EnvironmentFile=-/etc/default/hopeturtle-gps
 
-# Environment overrides (script has sane defaults if these are omitted)
-Environment=HT_SERIAL_PORT=/dev/serial0
+# Environment overrides 
+EnvironmentFile=-/etc/default/hopeturtle-gps
+Environment=HT_GPS_PORT=/dev/ttyS0
 Environment=HT_BAUD=9600
 Environment=HT_DATA_DIR=/home/hopeturtle002/hopeturtle/data
+
 
 # Working directory & command
 WorkingDirectory=/home/hopeturtle002/hopeturtle
