@@ -21,9 +21,11 @@ except ImportError:
 
 # ============================================================
 # (2) Configuration & Environment Variables
-# Allows overrides from environment (set in systemd service).
+# GPS is on mini-UART now (ttyS0). You can override via env.
+# Back-compat: if HT_GPS_PORT not set, we also check HT_SERIAL_PORT.
 # ============================================================
-PORT = os.getenv("HT_SERIAL_PORT", "/dev/serial0")
+DEFAULT_GPS_PORT = "/dev/ttyS0"  # mini UART mapped to GPIO17/GPIO27 (pins 11/13)
+GPS_PORT = os.getenv("HT_GPS_PORT") or os.getenv("HT_SERIAL_PORT", DEFAULT_GPS_PORT)
 BAUD = int(os.getenv("HT_BAUD", "9600"))
 READ_WINDOW_S = int(os.getenv("HT_READ_WINDOW_S", "12"))
 DATA_DIR = os.path.expanduser(os.getenv("HT_DATA_DIR", "~/hopeturtle/data"))
@@ -72,9 +74,9 @@ def main():
     csv_path = os.path.join(DATA_DIR, f"{today}_gps.csv")
     write_header = not os.path.exists(csv_path)
 
-    # ---- Open serial port ----
+    # ---- Open serial port (GPS on mini UART) ----
     try:
-        ser = serial.Serial(PORT, BAUD, timeout=1)
+        ser = serial.Serial(GPS_PORT, BAUD, timeout=1)
     except Exception as e:
         ts = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
         row = {k: "" for k in CSV_FIELDS}
@@ -83,7 +85,7 @@ def main():
             w = csv.DictWriter(f, fieldnames=CSV_FIELDS)
             if write_header: w.writeheader()
             w.writerow(row)
-        print(f"[WARN] Could not open {PORT}: {e}")
+        print(f"[WARN] Could not open {GPS_PORT}: {e}")
         return 0
 
     # ---- Read NMEA sentences for a short window ----
@@ -120,10 +122,12 @@ def main():
         elif line.startswith(("$GPGGA", "$GNGGA")):
             p = line.split(",")
             if len(p) >= 10:
-                fixq = int(p[6]) if p[6] else 0
-                sats = int(p[7]) if p[7] else None
+                try:    fixq = int(p[6]) if p[6] else 0
+                except: fixq = 0
+                try:    sats = int(p[7]) if p[7] else None
+                except: sats = None
                 hdop = float(p[8]) if p[8] else None
-                alt = float(p[9]) if p[9] else None
+                alt  = float(p[9]) if p[9] else None
 
         if fix_status == "fix":
             break
@@ -179,9 +183,9 @@ def main():
 
     # ---- Console feedback ----
     if status == "fix":
-        print(f"Logged FIX: {ts} lat={row['lat']} lon={row['lon']} -> CSV+JSON saved")
+        print(f"Logged FIX: {ts} lat={row['lat']} lon={row['lon']} -> CSV+JSON saved (GPS:{GPS_PORT})")
     else:
-        print(f"Logged {status.upper()}: {ts if ts else '(NO_TIME)'} -> CSV+JSON saved")
+        print(f"Logged {status.upper()}: {ts if ts else '(NO_TIME)'} -> CSV+JSON saved (GPS:{GPS_PORT})")
 
     return 0
 
