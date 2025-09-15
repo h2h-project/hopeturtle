@@ -1,0 +1,20 @@
+[Unit]
+Description=HopeTurtle OLED boot messages
+After=multi-user.target
+Wants=multi-user.target
+
+[Service]
+Type=oneshot
+User=hopeturtle002
+Group=hopeturtle002
+# 1) Waking
+ExecStart=/usr/bin/python3 /home/hopeturtle002/hopeturtle/src/oled_status.py boot-waking
+# 2) Alive
+ExecStart=/usr/bin/python3 /home/hopeturtle002/hopeturtle/src/oled_status.py boot-alive
+# 3) Show last known distance to Al Mawasi
+ExecStart=/usr/bin/python3 /home/hopeturtle002/hopeturtle/src/oled_status.py distance
+# 4) Optional: celebratory swim
+# ExecStart=/usr/bin/python3 /home/hopeturtle002/hopeturtle/src/oled_status.py swim
+
+[Install]
+WantedBy=multi-user.target
