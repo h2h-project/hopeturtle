@@ -1,0 +1,1 @@
+{"turtle_id": "HT-0001", "device_id": "pi-zero-2", "fix": {"timestamp_utc": "2025-01-01T00:00:00Z", "lat": 3.0738, "lon": 101.5183, "alt_m": 50, "sats": 8, "hdop": 0.9, "speed_kmh": 0.0, "course_deg": 0.0, "fix_quality": 1, "raw_date_utc": "010125", "raw_time_utc": "000000", "status": "fix"}}
