@@ -1,0 +1,30 @@
+# /etc/systemd/system/hopeturtle-boot.service
+#   _________     ____
+#  /          \  |  0 |
+# |            |/ ___\
+# |____________|_/
+#   |__|  |__|
+#
+# HopeTurtle Boot Service
+# Shows OLED messages during system startup:
+#  - "Hope Turtle is waking up!"
+#  - "Hope Turtle is alive!"
+#  - Last known distance to Mawasi
+
+[Unit]
+Description=HopeTurtle OLED Boot Messages
+After=multi-user.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/python3 /home/hopeturtle002/hopeturtle/src/oled_status.py boot-waking
+ExecStartPost=/bin/sleep 3
+ExecStartPost=/usr/bin/python3 /home/hopeturtle002/hopeturtle/src/oled_status.py boot-alive
+ExecStartPost=/usr/bin/python3 /home/hopeturtle002/hopeturtle/src/oled_status.py distance
+
+User=hopeturtle002
+Group=hopeturtle002
+WorkingDirectory=/home/hopeturtle002/hopeturtle
+
+[Install]
+WantedBy=multi-user.target
