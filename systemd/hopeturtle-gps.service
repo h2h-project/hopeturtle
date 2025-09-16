@@ -1,13 +1,14 @@
-#      ___________    _____
-#  /               \ |  o  |
-# |                |/   __\|
-# |  _______________  /
-#   |_|_|     |_|_|
+# /etc/systemd/system/hopeturtle-gps.service
+#   _________     ____
+#  /          \  |  0 |
+# |            |/ ___\
+# |____________|_/
+#   |__|  |__|
 #
 # HopeTurtle GPS Service
 # Runs gps_snapshot.py once (systemd timer calls this every 5 minutes).
 # Reads GPS from soft-serial GPIO17 by default and logs CSV + JSON prototype.
-# After each run, also displays abbreviated fix info on OLED.
+# After each run, displays abbreviated fix info on the OLED.
 
 [Unit]
 Description=HopeTurtle GPS one-shot logger
@@ -27,7 +28,7 @@ WorkingDirectory=/home/hopeturtle002/hopeturtle
 # ---- Main command ----
 ExecStart=/usr/bin/python3 /home/hopeturtle002/hopeturtle/src/gps_snapshot.py
 
-# ---- OLED feedback ----
+# ---- OLED feedback (show brief summary after logging) ----
 ExecStartPost=/usr/bin/python3 /home/hopeturtle002/hopeturtle/src/oled_status.py brief
 
 # ---- Run as user ----
