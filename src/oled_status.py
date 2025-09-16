@@ -207,3 +207,24 @@ def main():
 
 if __name__ == "__main__":
     sys.exit(main())
+
+## ADDING snapshot post from gps
+
+elif cmd == "brief":
+    # Show last row from latest CSV (short summary)
+    fp, ts, lat, lon = _find_last_fix_from_csvs(DATA_DIR)
+    if not fp:
+        _show_lines(device, ["No fix yet", "Check GPS..."], hold_s=3, center=True)
+    else:
+        try:
+            km = _haversine_km(lat, lon, REF_LAT, REF_LON)
+            sat_info = f"Sats: {len(str(lat))>0 and 'ok' or '?'}"  # crude fallback if no sat field
+            lines = [
+                f"{lat:.3f},{lon:.3f}",
+                f"{km:.1f} km → Mawasi",
+                sat_info
+            ]
+            _show_lines(device, lines, hold_s=4, center=True)
+        except Exception as e:
+            _show_lines(device, ["Err parsing fix", str(e)], hold_s=3, center=True)
+
