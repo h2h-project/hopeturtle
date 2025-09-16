@@ -22,3 +22,20 @@ echo "==> Running full install/update..."
 # ---- Summary ----
 echo "✅ Update complete."
 echo "💡 Both hopeturtle-gps.timer and hopeturtle-boot.service should now be active."
+
+# ---- Summary ----
+cat <<'EOF'
+
+    _________    ____
+  /           \ |  o |
+ |            |/ ___\|
+ |____________|_/
+   |__|  |__|
+
+ Hope Turtle Code is updated! 🐢
+
+EOF
+
+# OLED notify (safe if OLED missing)
+python3 src/oled_status.py notify-update || true
+
