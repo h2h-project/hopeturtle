@@ -15,7 +15,7 @@ echo "==> Data dir: $DATA_DIR"
 # ---- Ensure dependencies ----
 echo "==> Installing dependencies..."
 sudo apt-get update
-sudo apt-get install -y python3-serial python3-pigpio pigpio jq
+sudo apt-get install -y python3-serial python3-pigpio pigpio jq python3-pil python3-numpy
 
 # ---- Ensure pigpio daemon runs at boot (needed for soft-serial GPS) ----
 echo "==> Enabling pigpiod..."
@@ -32,22 +32,26 @@ else
   echo "==> UART already enabled."
 fi
 
-# ---- Install systemd service + timer ----
+# ---- Install systemd services + timers ----
 echo "==> Installing systemd service + timer..."
 sudo cp systemd/hopeturtle-gps.* /etc/systemd/system/
+sudo cp systemd/hopeturtle-boot.service /etc/systemd/system/
+
 sudo systemctl daemon-reload
 sudo systemctl enable --now hopeturtle-gps.timer
+sudo systemctl enable hopeturtle-boot.service
 
 # ---- GUI autostart of logs ----
 AUTOSTART_DIR="$HOME_DIR/.config/autostart"
 mkdir -p "$AUTOSTART_DIR"
 cp scripts/show_logs.desktop "$AUTOSTART_DIR/"
 
-# ---- Trigger one manual run ----
-echo "==> Triggering one manual run..."
+# ---- Trigger one manual GPS run ----
+echo "==> Triggering one manual GPS run..."
 sudo systemctl start hopeturtle-gps.service || true
 
 # ---- Summary ----
 echo "✅ Install complete."
 echo "⚠️ If 'enable_uart=1' was just added, please reboot for SIM900 to work."
 echo "💡 GPS will read via pigpio soft-serial on GPIO17 (pin 11)."
+echo "💡 OLED boot messages will now appear at startup via hopeturtle-boot.service."
