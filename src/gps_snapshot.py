@@ -13,23 +13,17 @@ Always exits with code 0 so the systemd timer remains green.
 
 # ============================================================
 # (1) Imports & Setup
-# - Standard libs, then optional pyserial (hardware UART) and pigpio (soft UART)
 # ============================================================
 import os, sys, time, json, csv
 from datetime import datetime, timezone
 
-# pyserial is only required for hardware UART mode; import lazily
-# pigpio is only required for software-serial mode; import lazily as well
-
-
 # ============================================================
 # (2) Configuration & Environment Variables
-# - Select soft/hard GPS mode and ports/pins
 # ============================================================
 MODE = os.getenv("HT_GPS_MODE", "soft").lower()   # "soft" (default) or "hard"
 SOFT_RX_PIN = int(os.getenv("HT_GPS_SOFT_RX", "17"))  # GPIO pin for GPS TX -> Pi RX
-DEFAULT_HARD_PORT = "/dev/ttyS0"                       # If you ever use mini-UART
-GPS_PORT = os.getenv("HT_GPS_PORT", DEFAULT_HARD_PORT) # Used only in hard mode
+DEFAULT_HARD_PORT = "/dev/ttyS0"                       # mini-UART
+GPS_PORT = os.getenv("HT_GPS_PORT", DEFAULT_HARD_PORT)
 BAUD = int(os.getenv("HT_BAUD", "9600"))
 READ_WINDOW_S = int(os.getenv("HT_READ_WINDOW_S", "12"))
 DATA_DIR = os.path.expanduser(os.getenv("HT_DATA_DIR", "~/hopeturtle/data"))
@@ -40,10 +34,8 @@ CSV_FIELDS = [
     "raw_time_utc", "status"
 ]
 
-
 # ============================================================
 # (3) Helper Functions
-# - NMEA conversions and time parsing
 # ============================================================
 def dm_to_deg(dm: str, hemi: str):
     """Convert NMEA ddmm.mmmm / dddmm.mmmm to signed decimal degrees."""
@@ -79,12 +71,15 @@ def write_row(csv_path, write_header, row):
 def safe_now_utc_str():
     return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
 
+def truncate(val, ndigits=6):
+    """Truncate floats safely to ndigits (default 6)."""
+    try:
+        return round(float(val), ndigits)
+    except Exception:
+        return val
 
 # ============================================================
-# (4) GPS Read (Soft-Serial or Hardware UART)
-# - Returns list of NMEA lines read during the window
-# - In soft mode, uses pigpio bit-banged serial on SOFT_RX_PIN
-# - In hard mode, uses pyserial on GPS_PORT
+# (4) GPS Read Functions
 # ============================================================
 def read_nmea_lines_soft(baud: int, window_s: int, rx_pin: int):
     lines = []
@@ -97,7 +92,6 @@ def read_nmea_lines_soft(baud: int, window_s: int, rx_pin: int):
     if not pi.connected:
         return lines, "error_soft_serial:pigpiod_not_connected"
 
-    # Open bit-banged serial: rx_pin, baud, and 8 means 8-bit bytes
     try:
         pi.set_mode(rx_pin, pigpio.INPUT)
         pi.bb_serial_read_open(rx_pin, baud, 8)
@@ -131,7 +125,7 @@ def read_nmea_lines_soft(baud: int, window_s: int, rx_pin: int):
 def read_nmea_lines_hard(port: str, baud: int, window_s: int):
     lines = []
     try:
-        import serial  # lazy import
+        import serial
     except ImportError as e:
         return lines, f"error_hard_serial:missing_pyserial:{e}"
 
@@ -157,10 +151,8 @@ def read_nmea_lines_hard(port: str, baud: int, window_s: int):
 
     return lines, None
 
-
 # ============================================================
-# (5) Parse NMEA & Build Data Row
-# - Extracts lat/lon/sats/hdop/fix/time, sets status and timestamp source
+# (5) Parse NMEA
 # ============================================================
 def parse_nmea_to_row(nmea_lines):
     lat = lon = alt = hdop = None
@@ -205,7 +197,7 @@ def parse_nmea_to_row(nmea_lines):
         if fix_status == "fix":
             break
 
-    # Timestamp selection
+    # Timestamp
     if gps_dt and fix_status == "fix":
         ts = gps_dt.strftime("%Y-%m-%dT%H:%M:%SZ")
         status = "fix"
@@ -218,13 +210,13 @@ def parse_nmea_to_row(nmea_lines):
 
     row = {
         "timestamp_utc": ts,
-        "lat": lat or "",
-        "lon": lon or "",
-        "alt_m": alt or "",
+        "lat": truncate(lat),
+        "lon": truncate(lon),
+        "alt_m": truncate(alt),
         "sats": sats or "",
-        "hdop": hdop or "",
-        "speed_kmh": round(speed_kmh, 3) if speed_kmh else "",
-        "course_deg": course_deg or "",
+        "hdop": truncate(hdop, 2),
+        "speed_kmh": truncate(speed_kmh, 3),
+        "course_deg": truncate(course_deg, 1),
         "fix_quality": fixq or 0,
         "raw_date_utc": r_date,
         "raw_time_utc": r_time,
@@ -232,10 +224,8 @@ def parse_nmea_to_row(nmea_lines):
     }
     return row
 
-
 # ============================================================
 # (6) Main
-# - Orchestrates read → parse → write CSV+JSON → console output
 # ============================================================
 def main():
     os.makedirs(DATA_DIR, exist_ok=True)
@@ -243,7 +233,7 @@ def main():
     csv_path = os.path.join(DATA_DIR, f"{today}_gps.csv")
     write_header = not os.path.exists(csv_path)
 
-    # Read NMEA depending on mode
+    # Read
     if MODE == "soft":
         nmea_lines, err = read_nmea_lines_soft(BAUD, READ_WINDOW_S, SOFT_RX_PIN)
         source_note = f"softGPIO{SOFT_RX_PIN}"
@@ -251,51 +241,48 @@ def main():
         nmea_lines, err = read_nmea_lines_hard(GPS_PORT, BAUD, READ_WINDOW_S)
         source_note = GPS_PORT
 
-    # If read failed early, log a breadcrumb row and exit 0
+    # Error
     if err:
         ts = safe_now_utc_str()
         row = {k: "" for k in CSV_FIELDS}
         row.update({"timestamp_utc": ts, "fix_quality": 0, "status": err})
         write_row(csv_path, write_header, row)
-
-        # Also append a JSON prototype with error status for downstream tools
         json_path = os.path.join(DATA_DIR, "JSON_export_prototype.txt")
         json_record = {
-            "turtle_id": "HT-0001",      # TODO: move to config
-            "device_id": "pi-zero-2",    # TODO: real device id
+            "turtle_id": "HT-0001",
+            "device_id": "pi-zero-2",
+            "source": source_note,
             "fix": row
         }
         with open(json_path, "a") as jf:
             jf.write(json.dumps(json_record) + "\n")
-
         print(f"[WARN] GPS read failed ({err}) via {source_note} -> CSV+JSON saved")
         return 0
 
-    # Parse NMEA → row
+    # Parse
     row = parse_nmea_to_row(nmea_lines)
-
-    # Write CSV
     write_row(csv_path, write_header, row)
 
-    # Write JSON export prototype (line-delimited)
+    # JSON
     json_path = os.path.join(DATA_DIR, "JSON_export_prototype.txt")
     json_record = {
-        "turtle_id": "HT-0001",      # TODO: move to config
-        "device_id": "pi-zero-2",    # TODO: real device id
+        "turtle_id": "HT-0001",
+        "device_id": "pi-zero-2",
+        "source": source_note,
+        "sats": row.get("sats", ""),
         "fix": row
     }
     with open(json_path, "a") as jf:
         jf.write(json.dumps(json_record) + "\n")
 
-    # Console feedback
+    # Console
     ts = row["timestamp_utc"] or "(NO_TIME)"
     if row["status"] == "fix":
-        print(f"Logged FIX: {ts} lat={row['lat']} lon={row['lon']} -> CSV+JSON saved (GPS:{source_note})")
+        print(f"Logged FIX: {ts} lat={row['lat']} lon={row['lon']} sats={row['sats']} -> CSV+JSON saved (GPS:{source_note})")
     else:
         print(f"Logged {row['status'].upper()}: {ts} -> CSV+JSON saved (GPS:{source_note})")
 
     return 0
-
 
 # ============================================================
 # (7) Entrypoint
