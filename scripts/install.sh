@@ -51,6 +51,23 @@ echo "==> Triggering one manual GPS run..."
 sudo systemctl start hopeturtle-gps.service || true
 
 # ---- Summary ----
+cat <<'EOF'
+
+    _________    ____
+  /           \ |  o |
+ |            |/ ___\|
+ |____________|_/
+   |__|  |__|
+
+ Fresh Hope Turtle Code installed! 🐢
+
+EOF
+
+# OLED notify (safe if OLED missing)
+python3 src/oled_status.py notify-install || true
+
+
+# ---- Summary ----
 echo "✅ Install complete."
 echo "⚠️ If 'enable_uart=1' was just added, please reboot for SIM900 to work."
 echo "💡 GPS will read via pigpio soft-serial on GPIO17 (pin 11)."
