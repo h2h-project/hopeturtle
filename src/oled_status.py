@@ -205,6 +205,11 @@ def main():
             _show_brief(device)
         else:
             _show_lines(device, [f"Unknown cmd:", cmd], hold_s=2.0, center=True)
+        elif cmd == "notify-install":
+            _show_lines(device, ["Hope Turtle", "Fresh install!", "🐢 ready"], hold_s=3, center=True)
+        elif cmd == "notify-update":
+            _show_lines(device, ["Hope Turtle", "Code updated!", "🐢 go!"], hold_s=3, center=True)
+
     except Exception:
         traceback.print_exc()
     finally:
