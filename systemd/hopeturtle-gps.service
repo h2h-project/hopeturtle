@@ -7,6 +7,7 @@
 # HopeTurtle GPS Service
 # Runs gps_snapshot.py once (systemd timer calls this every 5 minutes).
 # Reads GPS from soft-serial GPIO17 by default and logs CSV + JSON prototype.
+# After each run, also displays abbreviated fix info on OLED.
 
 [Unit]
 Description=HopeTurtle GPS one-shot logger
@@ -15,22 +16,23 @@ Description=HopeTurtle GPS one-shot logger
 Type=oneshot
 
 # ---- Environment configuration ----
-# Mode "soft" means use pigpio bit-banged serial on GPIO17
-# If you later want hardware UART, set HT_GPS_MODE=hard and HT_GPS_PORT=/dev/ttyS0
 Environment=HT_GPS_MODE=soft
 Environment=HT_GPS_SOFT_RX=17
 Environment=HT_BAUD=9600
 Environment=HT_DATA_DIR=/home/hopeturtle002/hopeturtle/data
 
-# ---- Where to run ----
+# ---- Working directory ----
 WorkingDirectory=/home/hopeturtle002/hopeturtle
 
-# ---- Command to execute ----
+# ---- Main command ----
 ExecStart=/usr/bin/python3 /home/hopeturtle002/hopeturtle/src/gps_snapshot.py
 
-# ---- Run as normal user ----
+# ---- OLED feedback ----
+ExecStartPost=/usr/bin/python3 /home/hopeturtle002/hopeturtle/src/oled_status.py brief
+
+# ---- Run as user ----
 User=hopeturtle002
 Group=hopeturtle002
 
-# ---- Lower priority so it doesn’t compete with modem/network ----
+# ---- Lower priority ----
 Nice=10
