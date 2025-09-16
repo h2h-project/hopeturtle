@@ -3,7 +3,7 @@
 HopeTurtle OLED Status Display
 - Shows short status messages or a 5s swimming animation on a 0.96" I2C SSD1306.
 - NEW: "distance" command shows km from last valid GPS fix to Al Mawasi (configurable).
-- NEW: "brief" command shows last valid fix (coords + sats + km to Mawasi).
+- NEW: "notify-install" and "notify-update" show success banners after install/update.
 - Fails gracefully if OLED or libraries are missing (prints to stdout, exits 0).
 
 Usage:
@@ -12,7 +12,8 @@ Usage:
   python3 oled_status.py gps-searching
   python3 oled_status.py swim
   python3 oled_status.py distance
-  python3 oled_status.py brief
+  python3 oled_status.py notify-install
+  python3 oled_status.py notify-update
 """
 
 import os, sys, time, traceback, glob, csv, math
@@ -55,11 +56,12 @@ def _show_lines(device, lines, hold_s=2.5, center=False):
     from PIL import Image
     img, draw, font = _prep_canvas(device)
     W, H = device.width, device.height
-    line_h = 14
+    line_h = 12 + 2
     total_h = len(lines) * line_h
     y0 = (H - total_h)//2 if center else 0
     for i, t in enumerate(lines[:5]):
-        t = str(t)  # enforce string
+        if not isinstance(t, str):  # reject non-strings
+            continue
         l, t0, r, b = draw.textbbox((0,0), t, font=font)
         w, h = r - l, b - t0
         x = (W - w)//2 if center else 0
@@ -74,22 +76,22 @@ def _clear(device):
     img = Image.new("1", (device.width, device.height), 0)
     device.display(img)
 
-def _swim_animation(device, duration_s=5.0, fps=2):
-    """ASCII turtle swim animation using provided frames."""
+def _swim_animation(device, duration_s=5.0, fps=12):
+    """Simple 1-bit ‘swimming turtle’ for ~5 seconds."""
     frames = [
         [
-            "      ___________    _____",
-            "  /               \\ |  o  |",
-            " |                |/   __\\|",
-            " |  _______________  /    ",
-            "   |_|_|     |_|_|          ",
+            "   _________    ____",
+            " /           \\ |  o |",
+            "|            |/ ___\\|",
+            "|____________|_/",
+            "  |__|  |__|"
         ],
         [
-            "      ___________    _____",
-            "  /               \\ |  o  |",
-            " |                |/   __\\|",
-            " |  _______________  /    ",
-            "   |_  |_|     |_|  _|     ",
+            "   _________    ____",
+            " /           \\ |  o |",
+            "|            |/ ___\\|",
+            "|____________|_/",
+            "   |_  |__| _|"
         ],
     ]
     if device is None:
@@ -100,18 +102,27 @@ def _swim_animation(device, duration_s=5.0, fps=2):
     from PIL import Image, ImageDraw
     W, H = device.width, device.height
     start = time.time()
+    x = -20
+    dx = 3
     frame_i = 0
     while time.time() - start < duration_s:
         img = Image.new("1", (W, H), 0)
         draw = ImageDraw.Draw(img)
         sprite = frames[frame_i % len(frames)]
-        sy = H//2 - len(sprite)//2
+        sy = H//2 - len(sprite)//2 - 6
         for row_idx, row in enumerate(sprite):
-            t = row.strip("\n")
-            draw.text((0, sy + row_idx*10), t, fill=1)
+            for col_idx, ch in enumerate(row):
+                if ch not in (" ",):
+                    px = x + col_idx
+                    py = sy + row_idx
+                    if 0 <= px < W and 0 <= py < H:
+                        draw.point((px, py), 1)
         device.display(img)
         time.sleep(1.0/fps)
         frame_i += 1
+        x += dx
+        if x > W:
+            x = -len(sprite[0])  # wrap around
     _clear(device)
 
 # ---------- Distance helpers ----------
@@ -125,6 +136,7 @@ def _haversine_km(lat1, lon1, lat2, lon2):
     return R * c
 
 def _find_last_fix_from_csvs(data_dir: str):
+    """Scan newest *_gps.csv for last row with lat/lon and status='fix' (case-insensitive)."""
     files = sorted(glob.glob(os.path.join(data_dir, "*_gps.csv")), key=os.path.getmtime, reverse=True)
     for fp in files:
         try:
@@ -136,59 +148,41 @@ def _find_last_fix_from_csvs(data_dir: str):
                 lon = row.get("lon") or ""
                 if status == "fix" and lat and lon:
                     ts = row.get("timestamp_utc") or ""
-                    return fp, ts, float(lat), float(lon), row.get("sats") or "?"
+                    return fp, ts, float(lat), float(lon)
         except Exception as e:
             print(f"[OLED] Could not parse {fp}: {e}")
             continue
-    return None, None, None, None, None
+    return None, None, None, None
 
 def _show_last_distance(device):
-    fp, ts, lat, lon, _ = _find_last_fix_from_csvs(DATA_DIR)
+    fp, ts, lat, lon = _find_last_fix_from_csvs(DATA_DIR)
     if not fp:
         _show_lines(device, ["No last fix", "found in data/"], hold_s=3.0, center=True)
         return
+
     try:
         km = _haversine_km(lat, lon, REF_LAT, REF_LON)
     except Exception as e:
         _show_lines(device, ["Fix parse error", str(e)], hold_s=3.0, center=True)
         return
+
+    shown_ts = ts if ts else "unknown UTC"
     lines = [
         "Last FIX → Mawasi",
         f"{km:.1f} km",
         f"({lat:.4f},{lon:.4f})",
-        ts or "unknown UTC"
+        shown_ts
     ]
     _show_lines(device, lines, hold_s=4.0, center=True)
-
-def _show_brief(device):
-    fp, ts, lat, lon, sats = _find_last_fix_from_csvs(DATA_DIR)
-    if not fp:
-        _show_lines(device, ["No fix yet", "Check GPS..."], hold_s=3, center=True)
-        return
-    try:
-        km = _haversine_km(lat, lon, REF_LAT, REF_LON)
-        lines = [
-            f"{lat:.3f},{lon:.3f}",
-            f"{km:.1f} km → Mawasi",
-            f"Sats: {sats}"
-        ]
-        _show_lines(device, lines, hold_s=4, center=True)
-    except Exception as e:
-        _show_lines(device, ["Err parsing fix", str(e)], hold_s=3, center=True)
 
 # ---------- Main ----------
 def main():
     if len(sys.argv) < 2:
-        print("Usage: oled_status.py [boot-waking|boot-alive|gps-searching|swim|distance|brief]")
+        print("Usage: oled_status.py [boot-waking|boot-alive|gps-searching|swim|distance|notify-install|notify-update]")
         return 0
-
-    cmd = sys.argv[1]
-    if not isinstance(cmd, str):
-        print("[OLED] Invalid command: not a string")
-        return 0
-    cmd = cmd.lower()
 
     device = _init_device()
+    cmd = sys.argv[1].lower()
 
     try:
         if cmd == "boot-waking":
@@ -198,18 +192,31 @@ def main():
         elif cmd == "gps-searching":
             _show_lines(device, ["GPS:", "Searching for satellites…"], hold_s=3.0, center=True)
         elif cmd == "swim":
-            _swim_animation(device, duration_s=5.0, fps=2)
+            _swim_animation(device, duration_s=5.0, fps=12)
         elif cmd == "distance":
             _show_last_distance(device)
-        elif cmd == "brief":
-            _show_brief(device)
-        else:
-            _show_lines(device, [f"Unknown cmd:", cmd], hold_s=2.0, center=True)
         elif cmd == "notify-install":
-            _show_lines(device, ["Hope Turtle", "Fresh install!", "🐢 ready"], hold_s=3, center=True)
+            _show_lines(device, [
+                "   _________    ____",
+                " /           \\ |  o |",
+                "|            |/ ___\\|",
+                "|____________|_/",
+                "  |__|  |__|",
+                "Fresh HopeTurtle",
+                "Code installed!"
+            ], hold_s=5.0, center=True)
         elif cmd == "notify-update":
-            _show_lines(device, ["Hope Turtle", "Code updated!", "🐢 go!"], hold_s=3, center=True)
-
+            _show_lines(device, [
+                "   _________    ____",
+                " /           \\ |  o |",
+                "|            |/ ___\\|",
+                "|____________|_/",
+                "  |__|  |__|",
+                "HopeTurtle Code",
+                "updated!"
+            ], hold_s=5.0, center=True)
+        else:
+            _show_lines(device, [f"Unknown cmd:", str(cmd)], hold_s=2.0, center=True)
     except Exception:
         traceback.print_exc()
     finally:
